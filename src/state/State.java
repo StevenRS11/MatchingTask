@@ -313,7 +313,7 @@ public class State
 	public void initState(BufferedReader br, Random rand)
 	{
 		plan = new LinkedList<ProbabilitySection>();
-		Config config = new Config();
+		Config config = null;
 		try
 		{
 

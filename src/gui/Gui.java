@@ -449,6 +449,7 @@ public class Gui extends JApplet implements ActionListener
 			    frame.validate();
 			    frame.setVisible(true);
 				startButton.setEnabled(true);
+				State.getState().printStatsToServer();
 
 			}
 		}

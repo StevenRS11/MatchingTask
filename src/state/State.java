@@ -11,13 +11,12 @@ import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Random;
 
-import state.State.Selection;
-
 import logic.Logic;
+import state.Config.PlanDef;
 
 public class State
 {
@@ -100,12 +99,11 @@ public class State
 	public static final String BASE_URL = "http://perelandra.dartmouth.edu/~stafford";
 
 	public int choicePoolMax = 1;
-	public final int demoLength = 30000;
 	public long startTime;
 	public double absoluteRewardProbability;
 	public int choicesPerMinute;
 
-	private LinkedList<state.ProbabilitySection> plan;
+	private LinkedList<state.ProbabilitySection> plan = new LinkedList<state.ProbabilitySection>();
 
 	private Statistics stats;
 
@@ -117,23 +115,28 @@ public class State
 	private Selection selection = Selection.INVALID;
 	private int lastChoiceTime;
 	private int rewardBarSize;
-	public ArrayList<Integer> breaks;
-
+	public float[] breaks;
+	private float changeOverPenalty;
+	private String rewardMagnitude;
 	private TaskStage currentStage = TaskStage.LICENSE;
 
 	public void reset()
 	{
-		initFromURL(new Random(System.nanoTime()));
-		this.initStats();
 		this.trialNumber = 0;
 		this.choicePool= 0;
 		this.timeElapsed = 0;
 		this.timeOnCurrentSection = 0;
 		this.currentScore = 0;
 		this.lastChoiceTime = 0;
+		this.totalPlanTime = 0;
 		this.startTime = System.currentTimeMillis();
+		initFromURL(new Random(System.nanoTime()));
+		this.initStats();
 	}
-	
+	public float getChangeoverPenalty()
+	{
+		return this.changeOverPenalty;
+	}
 	public Statistics getStats()
 	{
 		return this.stats;
@@ -169,11 +172,6 @@ public class State
 		this.trialNumber++;
 	}
 
-	public void resetTrialCount()
-	{
-		this.trialNumber = 0;
-	}
-
 	public int getLastChoiceTime()
 	{
 		return this.lastChoiceTime;
@@ -192,16 +190,6 @@ public class State
 	public boolean IsRunning()
 	{
 		return (this.currentStage == TaskStage.TASK_RUNNING || this.currentStage == TaskStage.TASK_DEMO) && !this.currentStage.paused();
-	}
-
-	public void resetTimeElapsed()
-	{
-		this.timeElapsed = 0;
-	}
-
-	public void resetStatistics()
-	{
-		this.stats = new Statistics();
 	}
 
 	public void printStatsToFile(File file)
@@ -224,6 +212,10 @@ public class State
 		return this.plan;
 	}
 
+	/**
+	 * returns time elapsed in milliseconds
+	 * @return
+	 */
 	public int getTimeElapsed()
 	{
 		return this.timeElapsed;
@@ -239,11 +231,6 @@ public class State
 		return this.timeOnCurrentSection += time;
 	}
 
-	public void resetTimeOnCurrentSection()
-	{
-		this.timeOnCurrentSection = 0;
-	}
-
 	public int getCurrentScore()
 	{
 		return this.currentScore;
@@ -252,11 +239,6 @@ public class State
 	public void incrementScore()
 	{
 		this.currentScore++;
-	}
-
-	public void resetScore()
-	{
-		this.currentScore = 0;
 	}
 
 	public Selection getCurrentSelection()
@@ -330,161 +312,110 @@ public class State
 
 	public void initState(BufferedReader br, Random rand)
 	{
-		double absoluteRewardProb = 0;
-		int trialsPerMin = 0;
-		LinkedList<ProbabilitySection> planOutline = new LinkedList<ProbabilitySection>();
-		String[] parsedString;
-		ArrayList<Integer> breaks = new ArrayList<Integer>();
-
+		plan = new LinkedList<ProbabilitySection>();
+		Config config = new Config();
 		try
 		{
-			String line = "start";
-			line = br.readLine();
 
-			while (line != null)
-			{
+			config = Config.read(br);
+			BuildProbabilityPlan(config.demo.block_time, config.demo.blocks_per_section, config.demo.ratios, plan, rand);
 
-				if (!line.startsWith("*"))
-				{
-					parsedString = line.split(":");
-					if (parsedString[0].equals("Absolute reward probability"))
-					{
-						absoluteRewardProb = Double.parseDouble(parsedString[1]);
+			for(int i = 0; i < config.plan.length; i++)
+			{	
+				PlanDef planDef = config.plan[i];
+				BuildProbabilityPlan(planDef.block_time, planDef.blocks_per_section, planDef.ratios, plan, rand);
+				this.totalPlanTime += planDef.block_time*planDef.blocks_per_section;
 
-					} else if (parsedString[0].equals("Trials per minute"))
-					{
-						trialsPerMin = Integer.parseInt(parsedString[1]);
-					} else if (parsedString[0].equals("Reward Bar Size"))
-					{
-						rewardBarSize = Integer.parseInt(parsedString[1]);
-					} else if (parsedString[0].equals("Break Percentage Locations"))
-					{
-						for (int i = 1; i < parsedString.length; i++)
-						{
-							breaks.add(Integer.parseInt(parsedString[i]));
-						}
-						this.breaks = breaks;
-					} else if (parsedString[0].equals("plan"))
-					{
-						parsedString = parsedString[1].split(",");
-
-						int fragTime = Integer.parseInt(parsedString[0]) * 1000;
-						int totalTime = Integer.parseInt(parsedString[1]) * 1000;
-
-						int[][] ratios = new int[parsedString.length - 2][2];
-						int count = 0;
-
-						for (String string : parsedString)
-						{
-							if (string.startsWith("{"))
-							{
-								string = string.replace("{", "");
-								string = string.replace("}", "");
-
-								String[] ints = string.split(";");
-
-								ratios[count][0] = Integer.parseInt(ints[0]);
-								ratios[count][1] = Integer.parseInt(ints[1]);
-								count++;
-
-							}
-						}
-
-						BuildProbabilityPlan(fragTime, totalTime, ratios, planOutline, rand);
-					}
-				}
-				line = br.readLine();
 			}
-
 			br.close();
-
-		} catch (Exception e)
+		} 
+		catch (IOException e)
 		{
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-
-		this.absoluteRewardProbability = absoluteRewardProb;
-		this.choicesPerMinute = trialsPerMin;
-		this.plan = planOutline;
-		long totalTime = 0;
-		for (ProbabilitySection section : plan)
-		{
-			totalTime += section.duration;
-		}
-		this.totalPlanTime = totalTime;
+		this.rewardMagnitude=config.reward_magnitude;
+		this.rewardBarSize = config.reward_bar_size;
+		this.absoluteRewardProbability = config.absolute_reward_probability;
+		this.breaks = config.break_percentage_locations;
+		this.choicesPerMinute = config.trials_per_minute;
+		this.changeOverPenalty = config.changeover_penalty;
 	}
 
 	/**
 	 * generates a randomized list of probability sections, where adjacent ones
 	 * switch.
 	 * 
-	 * @param sectionsDuration
-	 * @param totalDuration
+	 * @param blockDuration
+	 * @param blocksPerSection
 	 * @param sectionsRatios
 	 * @param plan
 	 * @return
 	 */
-	public LinkedList<ProbabilitySection> BuildProbabilityPlan(int sectionsDuration, int totalDuration, int[][] sectionsRatios, LinkedList<ProbabilitySection> plan, Random rand)
+	public LinkedList<ProbabilitySection> BuildProbabilityPlan(int blockDuration, int blocksPerSection, int[][] sectionsRatios, LinkedList<ProbabilitySection> plan, Random rand)
 	{
-		int uniqueRatios = 0;
-		for (int[] ratio : sectionsRatios)
+
+		ArrayList<int[]> ratios = new ArrayList<int[]>();
+		for (int i = 0; ratios.size() < blocksPerSection; i++)
 		{
+			int[] ratio = sectionsRatios[i%sectionsRatios.length];
 			if (ratio[0] != ratio[1])
 			{
-				uniqueRatios++;
+				ratios.add(new int[]{ratio[1],ratio[0]});
 			}
-			uniqueRatios++;
+			ratios.add(ratio);
 		}
-		int[][] randomBalancedRatios = new int[uniqueRatios][];
-		LinkedList<Integer> intPool = new LinkedList<Integer>();
-		LinkedList<int[]> ratioPool = new LinkedList<int[]>();
-		LinkedList<ProbabilitySection> planSection = new LinkedList<ProbabilitySection>();
-
-		for (int i = 0; i < uniqueRatios; i++)
+		
+		int[][] planRatios = new int[blocksPerSection][2];
+		
+		int i = 0;
+		planRatios[i] = ratios.get(rand.nextInt(ratios.size()));
+		ratios.remove(planRatios[i]);
+		i++;
+		
+		while(!ratios.isEmpty())
 		{
-			intPool.add(i);
-		}
-
-		for (int[] ratio : sectionsRatios)
-		{
-			randomBalancedRatios[(intPool.remove(rand.nextInt(intPool.size())))] = (ratio);
-			if (ratio[0] != ratio[1])
+			int[] canidate = ratios.get(rand.nextInt(ratios.size()));
+			if(validateRatioDifference(planRatios[i-1],canidate))
 			{
-				randomBalancedRatios[(intPool.remove(rand.nextInt(intPool.size())))] = (new int[] { ratio[1], ratio[0] });
+				planRatios[i] = canidate;
+				ratios.remove(canidate);
+				i++;
 			}
-		}
-
-		while (totalDuration > 0)
-		{
-			if (ratioPool.isEmpty())
+			else
 			{
-				for (int i = 0; i < randomBalancedRatios.length; i++)
+				int count = rand.nextInt(i);
+
+				while(count<i && i != 0)
 				{
-					ratioPool.addLast(randomBalancedRatios[i]);
+					int topIndex = count;
+					int bottomIndex = (count+1);
+					
+					int[] topRatio = planRatios[topIndex];
+					int[] bottomRatio = planRatios[bottomIndex];
+
+					if(validateRatioDifference(topRatio,canidate)&&validateRatioDifference(bottomRatio,canidate))
+					{
+						int[][] top = Arrays.copyOfRange(planRatios, 0, topIndex+1);
+						int[][] bottom =  Arrays.copyOfRange(planRatios, bottomIndex,planRatios.length);
+						
+						planRatios[topIndex+1] = canidate;
+						System.arraycopy(bottom, 0, planRatios, bottomIndex+1, bottom.length-1);
+						ratios.remove(canidate);
+						i++;
+						break;
+
+					}
+					count = (count+1);
 				}
 			}
-
-			int[] ratio = ratioPool.getFirst();
-
-			if (plan.isEmpty() || this.validateRatioDifference(planSection.isEmpty() ? plan.getLast().rewardRatio : planSection.getLast().rewardRatio, ratio))
-			{
-				totalDuration -= sectionsDuration;
-				ratioPool.remove(ratio);
-				planSection.addLast(new ProbabilitySection(sectionsDuration, ratio));
-				if (plan.isEmpty())
-				{
-					plan.addLast(planSection.poll());
-				}
-			} else if (rand.nextBoolean() && !planSection.isEmpty())
-			{
-				planSection.addLast(planSection.removeFirst());
-			} else if (!ratioPool.isEmpty())
-			{
-				ratioPool.addLast(ratioPool.removeFirst());
-			}
 		}
-		plan.addAll(planSection);
+		
+		for (int index = 0; index < blocksPerSection; index++)
+		{
+			plan.add(new ProbabilitySection(blockDuration, planRatios[index]));
+		}
+		
 		return plan;
 	}
 
@@ -498,6 +429,15 @@ public class State
 		{
 			return false;
 		}
+		if(ratio1[1]==0||ratio1[0]==0||ratio2[1]==0||ratio2[0]==0)
+		{
+			return false;
+		}
 		return true;
+	}
+
+	public String getRewardMagnitude()
+	{
+		return rewardMagnitude;
 	}
 }

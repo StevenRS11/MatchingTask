@@ -16,30 +16,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-
-import javax.swing.JApplet;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JEditorPane;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.JTextPane;
-import javax.swing.Timer;
-
-import state.Choice;
-import state.State;
-import state.State.Selection;
-import state.State.TaskStage;
-import utils.SoundHelper;
-
-
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -50,9 +27,25 @@ import java.net.URL;
 import java.util.LinkedList;
 import java.util.Random;
 
+import javax.swing.JApplet;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JEditorPane;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.Timer;
 
 import logic.Logic;
-import logic.MatchingTask;
+import state.Choice;
+import state.ProbabilitySection;
+import state.State;
+import state.State.Selection;
+import state.State.TaskStage;
+import utils.SoundHelper;
 
 
 public class Gui extends JApplet implements ActionListener
@@ -64,7 +57,7 @@ public class Gui extends JApplet implements ActionListener
 
 	private final Dimension size = new Dimension(1200,760);
 	public LinkedList<GuiShape> shapes = new LinkedList<GuiShape>();
-
+	Timer timer;
 	private Image offImage;
 	private Graphics offGraphics;
 	private SoundHelper soundHelper;
@@ -117,7 +110,6 @@ public class Gui extends JApplet implements ActionListener
 			logic.run();
 			soundHelper = new SoundHelper();
 			soundHelper.loadSounds(this);
-			new Timer(40,gui).start();
 		} catch (InterruptedException e)
 		{
 			e.printStackTrace();
@@ -149,8 +141,8 @@ public class Gui extends JApplet implements ActionListener
 		this.finished = this.setupEnding(new Container());
 		this.starting = this.setupStarting(new Container());
 
-		new Timer(5, this).start();
-		
+		timer = new Timer(5, this);
+		timer.start();
 		return this;
 	}
 
@@ -247,9 +239,11 @@ public class Gui extends JApplet implements ActionListener
 		JButton continueButton = new JButton("Continue");
 		continueButton.setEnabled(true);
 		continueButton.addActionListener(new ContinueButtonListener());
-		panel.add(continueButton ,BorderLayout.LINE_START);
-		panel.add(new JLabel("Your unique session id="));
-
+		
+		JButton restartButton = new JButton("Repeat Demo");
+		restartButton.addActionListener(new RepeatDemoListener());
+		panel.add(restartButton ,BorderLayout.LINE_START);
+		panel.add(continueButton,BorderLayout.LINE_START);
 		panel.add(session);
 		
 		cp.add(scrollPane, BorderLayout.CENTER);
@@ -368,6 +362,22 @@ public class Gui extends JApplet implements ActionListener
 			requestFocusInWindow();
 		}
 	}
+	
+	private class RepeatDemoListener implements ActionListener
+	{
+		public void actionPerformed(ActionEvent event)
+		{
+			TaskStage stage = State.getState().getTaskStage();
+			if(stage == TaskStage.START)
+			{
+				State.getState().setTaskStage(TaskStage.TASK_DEMO);
+				State.getState().reset();
+			}
+			
+			
+			requestFocusInWindow();
+		}
+	}
 	private class ContinueButtonListener implements ActionListener
 	{
 		public void actionPerformed(ActionEvent event)
@@ -422,7 +432,6 @@ public class Gui extends JApplet implements ActionListener
 			{
 				State.getState().getTaskStage().setPaused(true);
 				
-				JFrame frame = new JFrame();
 				StringBuilder writer = new StringBuilder();
 				for (Choice choice : State.getState().getStats().getChoices())
 				{
@@ -434,7 +443,7 @@ public class Gui extends JApplet implements ActionListener
 			    texPane.setEditable(true);
 			    texPane.setText(writer.toString());
 			    
-			    
+				JFrame frame = new JFrame();
 			    frame.add(scrollPane);
 			    frame.pack();
 			    frame.validate();
@@ -525,7 +534,7 @@ public class Gui extends JApplet implements ActionListener
 			this.setGuiForStage(State.getState().getTaskStage());
 		}
 		
-		this.repaint();		
+		this.repaint();
 	}
 	@Override
 	public void update(Graphics g)

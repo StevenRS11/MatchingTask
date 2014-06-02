@@ -96,8 +96,7 @@ public class Statistics
 		{
 			Socket echoSocket = new Socket("129.170.18.40", 3332);
 			PrintWriter writer = new PrintWriter(echoSocket.getOutputStream(), true);
-			BufferedReader in = new BufferedReader(new InputStreamReader(echoSocket.getInputStream()));
-			BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
+
 			this.printStats(writer);
 		} catch (Exception e)
 		{

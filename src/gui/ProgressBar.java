@@ -26,7 +26,7 @@ public class ProgressBar extends GuiShape
 
 	public ProgressBar(Container container,Color color,int xPos, int yPos, int width, int height)
 	{
-		super(container ,color, xPos, yPos,width, height);
+		super(container, color, xPos, yPos,width, height);
 		reward = new Rectangle2D.Double(x1,y1,w,h1);
 		shape = new Rectangle2D.Double();
 		this.maxBars = State.getState().getRewardBarSize();
@@ -61,7 +61,7 @@ public class ProgressBar extends GuiShape
 			if(this.animTime<this.maxAnimTime)
 			{
 
-				page.drawString("+25c", (int) (x1+w1/4), (int) (y1-h1/4));
+				page.drawString("+"+State.getState().getRewardMagnitude(), (int) (x1+w1/4), (int) (y1-h1/4));
 				if(this.animTime==0)
 				{
 					SoundHelper.playMoneySound();

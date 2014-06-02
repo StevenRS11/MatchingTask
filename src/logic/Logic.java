@@ -80,7 +80,7 @@ public class Logic implements Runnable
 				{
 					rewardStatus+=2;
 				}
-				if (state.getPrevSelection() == currentSelection || this.rand.nextBoolean()||state.getPrevSelection() == Selection.INVALID)
+				if (state.getPrevSelection() == currentSelection || this.rand.nextFloat()>State.getState().getChangeoverPenalty()||state.getPrevSelection() == Selection.INVALID)
 				{
 					if (currentSelection.isBaited())
 					{
@@ -99,40 +99,46 @@ public class Logic implements Runnable
 				state.choicePool--;
 				state.setSelection(Selection.INVALID);
 				this.shouldBreak();
-			}
-
-			if (state.getPlan().getFirst().duration <= state.getTimeOnCurrentSection())
-			{
-				state.incrementTimeOnCurrentSection(-state.getPlan().getFirst().duration);
-				state.getPlan().removeFirst();
-			}
-
-			if (state.getPlan().isEmpty())
-			{
-				Finish();
-			}
-			
-			if(state.getTaskStage() == TaskStage.TASK_DEMO)
-			{
-				if(state.getTimeElapsed()>state.demoLength)
+				
+				int duration = state.getPlan().getFirst().duration;
+				int currentTaskTime = (int) (state.getTimeOnCurrentSection()/1000F);
+				
+				if (state.getPlan().getFirst().duration <= state.getTimeOnCurrentSection()/1000)
 				{
-					State.getState().reset();
-					state.setTaskStage(TaskStage.START);
+					if(state.getTaskStage() == TaskStage.TASK_DEMO)
+					{
+						State.getState().reset();
+						state.getPlan().removeFirst();
+						state.setTaskStage(TaskStage.START);
+					}
+					
+					state.incrementTimeOnCurrentSection(-state.getPlan().getFirst().duration);
+					state.getPlan().removeFirst();
+				}
+
+				if (state.getPlan().isEmpty())
+				{
+					Finish();
 				}
 			}
+
 		}
 	}
 	
-	@SuppressWarnings("unchecked")
 	public void shouldBreak()
 	{
-		for(Integer breakTime : ((ArrayList<Integer>)State.getState().breaks.clone()))
+		if(State.getState().getTaskStage() != TaskStage.TASK_DEMO)
 		{
-			double timeElapsedFrac =  (State.getState().getTimeElapsed()/(State.getState().totalPlanTime))*100;
-			if(timeElapsedFrac>breakTime)
+			float[] breaks = State.getState().breaks;
+			for(int i = 0; i < breaks.length; i++)
 			{
-				State.getState().breaks.remove(breakTime);
-				State.getState().setTaskStage(TaskStage.TASK_BREAK);
+				
+				double timeElapsedFrac =  (State.getState().getTimeElapsed()/((State.getState().totalPlanTime))/1000);
+				if(timeElapsedFrac>breaks[i])
+				{
+					breaks[i]=2;
+					State.getState().setTaskStage(TaskStage.TASK_BREAK);
+				}
 			}
 		}
 	}
